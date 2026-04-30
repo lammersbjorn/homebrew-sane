@@ -1,0 +1,73 @@
+name: Update Sane Formula
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v4
+
+      - name: Resolve latest Sane release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="$(gh release list \
+            --repo lammersbjorn/sane \
+            --exclude-drafts \
+            --limit 20 \
+            --json tagName,isPrerelease,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[0].tagName')"
+          VERSION="${TAG#v}"
+          TGZ="sane-codex-${VERSION}.tgz"
+          URL="https://github.com/lammersbjorn/sane/releases/download/${TAG}/${TGZ}"
+          SUMS="$(curl -fsSL "https://github.com/lammersbjorn/sane/releases/download/${TAG}/SHA256SUMS.txt")"
+          SHA="$(printf '%s\n' "$SUMS" | awk -v file="artifacts/${TGZ}" '$2 == file { print $1 }')"
+
+          if [ -z "$TAG" ] || [ -z "$SHA" ]; then
+            echo "Failed to resolve Sane release or tarball checksum."
+            exit 1
+          fi
+
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Update formula
+        run: |
+          set -euo pipefail
+          ruby -0777 -i -pe 'gsub(%r{url "https://github\.com/lammersbjorn/sane/releases/download/[^"]+"}, %{url "${{ steps.release.outputs.url }}"}); gsub(/sha256 "[^"]+"/, %{sha256 "${{ steps.release.outputs.sha }}"})' Formula/sane.rb
+          ruby -0777 -i -pe 'gsub(%{bin/sane.cjs}, %{bin/sane.js})' Formula/sane.rb
+
+      - name: Validate formula
+        run: |
+          set -euo pipefail
+          brew tap lammersbjorn/sane "$GITHUB_WORKSPACE"
+          brew audit --strict sane
+          brew install --build-from-source sane
+          sane status
+
+      - name: Commit formula update
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Formula already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/sane.rb
+          git commit -m "sane ${{ steps.release.outputs.version }}"
+          git push
