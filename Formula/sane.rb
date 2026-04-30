@@ -1,8 +1,8 @@
 class Sane < Formula
   desc "Terminal onboarding and setup surface for Codex"
   homepage "https://github.com/lammersbjorn/sane"
-  url "https://github.com/lammersbjorn/sane/releases/download/v1.0.0-beta.6/sane-codex-1.0.0-beta.6.tgz"
-  sha256 "9d268d5abb385385596eb0a1964ac56d9147141980e64803887575154f8c85f9"
+  url "https://github.com/lammersbjorn/sane/releases/download/v1.0.0-beta.8/sane-codex-1.0.0-beta.8.tgz"
+  sha256 "b9800fb1b05b19e60e49d39d132d4048a7be7a6439b428ec5e74e1a0e7ecf8a2"
   license any_of: ["MIT", "Apache-2.0"]
 
   depends_on "node@22"
